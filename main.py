@@ -1,6 +1,6 @@
 import os
 import logging
-from anthropic import Anthropic
+import requests
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -8,11 +8,11 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize Anthropic client
-api_key = os.getenv("ANTHROPIC_API_KEY")
+# Initialize Open Router API client
+api_key = os.getenv("OPEN_ROUTER_API_KEY")
 if not api_key:
-    raise ValueError("ANTHROPIC_API_KEY не установлен!")
-client = Anthropic(api_key=api_key)
+    raise ValueError("OPEN_ROUTER_API_KEY не установлен!")
+OPEN_ROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # Store conversation history per user
 user_conversations = {}
@@ -90,16 +90,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     conversation.append({"role": "user", "content": user_message})
     
     try:
-        # Отправляем запрос к Claude
-        response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=1024,
-            system=SYSTEM_PROMPT,
-            messages=conversation
-        )
+        # Отправляем запрос к Claude через Open Router
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        
+        payload = {
+            "model": "anthropic/claude-3.5-sonnet",
+            "messages": conversation,
+            "system": SYSTEM_PROMPT,
+            "max_tokens": 1024,
+            "temperature": 0.7,
+        }
+        
+        response = requests.post(OPEN_ROUTER_API_URL, headers=headers, json=payload)
+        response.raise_for_status()
         
         # Получаем ответ
-        assistant_message = response.content[0].text
+        response_data = response.json()
+        assistant_message = response_data["choices"][0]["message"]["content"]
         
         # Добавляем ответ в историю
         conversation.append({"role": "assistant", "content": assistant_message})
