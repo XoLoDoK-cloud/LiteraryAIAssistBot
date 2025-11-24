@@ -14,15 +14,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-api_key = os.getenv("OPEN_ROUTER_API_KEY")
+api_key = os.getenv("GROK_API_KEY")
 if not api_key:
-    raise ValueError("🚨 OPEN_ROUTER_API_KEY не установлен!")
+    raise ValueError("🚨 GROK_API_KEY не установлен!")
 token = os.getenv("TELEGRAM_BOT_TOKEN")
 if not token:
     raise ValueError("🚨 TELEGRAM_BOT_TOKEN не установлен!")
 
-OPEN_ROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "mistralai/mistral-7b-instruct"
+GROK_API_URL = "https://api.x.ai/v1/chat/completions"
+MODEL = "grok-3"
 
 user_data: Dict = {}
 
@@ -443,7 +443,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "presence_penalty": 0.15,
         }
         
-        response = requests.post(OPEN_ROUTER_API_URL, headers=headers, json=payload, timeout=40)
+        response = requests.post(GROK_API_URL, headers=headers, json=payload, timeout=40)
         response.raise_for_status()
         
         result = response.json()
