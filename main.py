@@ -383,7 +383,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_id = update.effective_user.id
     user_message = update.message.text.strip()
     
-    if not user_message:
+    if not user_message or not client:
+        await update.message.reply_text("❌ API не готов. Попробуй позже.")
         return
     
     data = get_user_data(user_id)
@@ -418,12 +419,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if intent in intent_hints:
             system_prompt += intent_hints[intent]
         
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://replit.com",
-        }
-        
         if intent in ["psychology", "hidden", "philosophy"]:
             temp, tokens = 0.75, 1700
         elif intent in ["comparison", "influence"]:
@@ -433,23 +428,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         else:
             temp, tokens = 0.8, 1300
         
-        payload = {
-            "model": MODEL,
-            "messages": conversation,
-            "system": system_prompt,
-            "max_tokens": tokens,
-            "temperature": temp,
-            "top_p": 0.96,
-            "frequency_penalty": 0.2,
-            "presence_penalty": 0.15,
-        }
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=tokens,
+            system=system_prompt,
+            messages=conversation,
+            temperature=temp,
+        )
         
-        response = requests.post(GROK_API_URL, headers=headers, json=payload, timeout=40)
-        response.raise_for_status()
-        
-        result = response.json()
-        assistant_message = result["choices"][0]["message"]["content"]
-        
+        assistant_message = response.content[0].text
         conversation.append({"role": "assistant", "content": assistant_message})
         
         if len(assistant_message) > 4090:
@@ -466,14 +453,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         ]
         await update.message.reply_text("🎯 Что дальше?", reply_markup=InlineKeyboardMarkup(keyboard))
         
-    except requests.exceptions.Timeout:
-        await update.message.reply_text("⏱️ Время истекло. Попробуй короче!")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"API Error: {e}")
-        await update.message.reply_text("❌ Ошибка API. /clear и попробуй снова!")
     except Exception as e:
-        logger.error(f"Error: {e}")
-        await update.message.reply_text("😕 Ошибка. /clear")
+        logger.error(f"API Error: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)[:100]}. Используй /clear")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
