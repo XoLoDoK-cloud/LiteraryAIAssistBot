@@ -1,7 +1,6 @@
 import os
 import logging
-import requests
-import json
+from anthropic import Anthropic
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (Application, CommandHandler, MessageHandler, 
                          CallbackQueryHandler, filters, ContextTypes)
@@ -14,15 +13,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-api_key = os.getenv("GROK_API_KEY")
+api_key = os.getenv("ANTHROPIC_API_KEY")
 if not api_key:
-    raise ValueError("🚨 GROK_API_KEY не установлен!")
+    api_key = os.getenv("GROK_API_KEY")
+    if api_key:
+        logger.warning("⚠️ Using GROK_API_KEY as fallback")
 token = os.getenv("TELEGRAM_BOT_TOKEN")
 if not token:
     raise ValueError("🚨 TELEGRAM_BOT_TOKEN не установлен!")
 
-GROK_API_URL = "https://api.x.ai/v1/chat/completions"
-MODEL = "grok-3"
+client = Anthropic(api_key=api_key) if api_key else None
+MODEL = "claude-3-5-sonnet-20241022"
 
 user_data: Dict = {}
 
