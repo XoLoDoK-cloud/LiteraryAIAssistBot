@@ -1,6 +1,7 @@
 import os
 import logging
-from anthropic import Anthropic
+import requests
+import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (Application, CommandHandler, MessageHandler, 
                          CallbackQueryHandler, filters, ContextTypes)
@@ -13,15 +14,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-api_key = os.getenv("ANTHROPIC_API_KEY")
+api_key = os.getenv("GROK_API_KEY")
 if not api_key:
-    raise ValueError("🚨 ANTHROPIC_API_KEY не установлен!")
+    raise ValueError("🚨 GROK_API_KEY не установлен!")
 token = os.getenv("TELEGRAM_BOT_TOKEN")
 if not token:
     raise ValueError("🚨 TELEGRAM_BOT_TOKEN не установлен!")
 
-client = Anthropic(api_key=api_key)
-MODEL = "claude-3-5-sonnet-20241022"
+GROK_API_URL = "https://api.x.ai/v1/chat/completions"
+MODEL = "grok-4-fast-non-reasoning"
 
 user_data: Dict = {}
 
@@ -104,7 +105,7 @@ SYSTEM_PROMPT = """Ты – СУПЕР ИНТЕЛЛЕКТУАЛЬНЫЙ ЭКСП
 Кингуоми Суко - "Норвежское лето", японская лирика
 
 📚 БАЗА ЗНАНИЙ (ЛИТЕРАТУРНЫЕ НАПРАВЛЕНИЯ И ЭПОХИ):
-ДРЕВНЯЯ: Гомер, Софокл, Еврипид, Аристофан - древнегреческая драма
+ДРЕ �НЯЯ: Гомер, Софокл, Еврипид, Аристофан - древнегреческая драма
 СРЕДНЕВЕКОВЬЕ: Данте, Петрарка - религиозная литература, переход к Возрождению
 ВОЗРОЖДЕНИЕ: Шекспир, Сервантес, Мольер - гуманизм
 БАРОККО: Кальдерон, Лопе де Вега - богатство формы
@@ -425,15 +426,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         else:
             temp, tokens = 0.8, 1300
         
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=tokens,
-            system=system_prompt,
-            messages=conversation,
-            temperature=temp,
-        )
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
         
-        assistant_message = response.content[0].text
+        payload = {
+            "model": MODEL,
+            "messages": conversation,
+            "system": system_prompt,
+            "max_tokens": tokens,
+            "temperature": temp,
+        }
+        
+        response = requests.post(GROK_API_URL, headers=headers, json=payload, timeout=40)
+        response.raise_for_status()
+        
+        result = response.json()
+        assistant_message = result["choices"][0]["message"]["content"]
         conversation.append({"role": "assistant", "content": assistant_message})
         
         if len(assistant_message) > 4090:
@@ -450,9 +460,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         ]
         await update.message.reply_text("🎯 Что дальше?", reply_markup=InlineKeyboardMarkup(keyboard))
         
-    except Exception as e:
+    except requests.exceptions.Timeout:
+        await update.message.reply_text("⏱️ Время истекло. Попробуй короче!")
+    except requests.exceptions.RequestException as e:
         logger.error(f"API Error: {e}")
-        await update.message.reply_text(f"❌ Ошибка: {str(e)[:80]}. /clear")
+        await update.message.reply_text("❌ Ошибка API. /clear и попробуй снова!")
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text("😕 Ошибка. /clear")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
